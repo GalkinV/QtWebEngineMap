@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/static">
+        <file>qwebchannel.js</file>
+        <file>qtconnector.js</file>
+        <file>drawAndEdit.html</file>
+        <file>ol.css</file>
+        <file>ol.js</file>
+    </qresource>
+</RCC>

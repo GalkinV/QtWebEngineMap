@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="ol.css" type="text/css">
+  </head>
+  <body style="width: 100%; height: 100%; position: absolute; padding: 0; margin: 0;">
+    <div id="map" class="map" style="width: 100%; height: 100%;"></div>
+
+    <script src="ol.js"></script>
+    <script src="qwebchannel.js"></script>
+    <script src="qtconnector.js"></script>
+    <script>
+      var Map                    = ol.Map;
+      var View                   = ol.View;
+      var {Draw, Modify, Snap}   = ol.interaction;
+      var TileLayer              = ol.layer.Tile;
+      var VectorLayer            = ol.layer.Vector;
+      var OSM                    = ol.source.OSM;
+      var VectorSource           = ol.source.Vector;
+      var Style                  = ol.style.Style;
+
+      var raster = new TileLayer({
+        source: new OSM()
+      });
+
+      var source = new VectorSource();
+      var vector = new VectorLayer({
+        source: source,
+        style: new Style({
+          // Прозрачная белая заливка
+          fill: new ol.style.Fill({
+            color: 'rgba(255, 255, 255, 0.2)'
+          }),
+          // Желтые линии, толщиной 2
+          stroke: new ol.style.Stroke({
+            color: '#ffcc33',
+            width: 2
+          })
+        })
+      });
+
+      var map = new Map({
+        layers: [raster, vector],
+        target: 'map',
+        view: new View({
+          center: [3000000, 5000000],
+          zoom: 4
+        })
+      });
+
+      var modify = new Modify({source: source});
+      map.addInteraction(modify);
+
+      var draw, snap; // global so we can remove them later
+
+      function addInteractions() {
+        draw = new Draw({
+          source: source,
+          type: "Polygon"
+        });
+        map.addInteraction(draw);
+        snap = new Snap({source: source});
+        map.addInteraction(snap);
+
+      }
+
+      addInteractions();
+
+      // Выдает WKT в 4326 для полученной фигуры (features)
+      function getFeaturesWkt4326(e) {
+            // Копия фигуры
+            var polygon = e.getGeometry().clone();
+            // Трансформация проекции из проекции растрового слоя карты в EPSG:4326
+            var poly = polygon.transform( raster.getSource().getProjection().getCode(), 'EPSG:4326' );
+            var format = new ol.format.WKT();
+
+            return format.writeGeometry(polygon)
+      }
+
+      // Событие окончания рисования фигуры
+      draw.on('drawend',(e) => {
+             polygonWKT = getFeaturesWkt4326(e.feature)
+             console.log(e.feature.ol_uid, "   ",polygonWKT);
+             window.server.catchJsWkt( polygonWKT );
+      });
+
+      // Событие окончания модификации фигуры
+      modify.on('modifyend',(e) => {
+            polygonWKT = getFeaturesWkt4326(e.features.getArray()[0]);
+            console.log(e.features.getArray()[0].ol_uid, "   ",polygonWKT);
+            window.server.catchJsWkt( polygonWKT );
+      });
+
+      // Событие начала рисования фигуры
+      draw.on('drawstart',(e) => {
+            // Очистка векторного слоя (удаление всех фигур)
+            vector.getSource().clear();
+      });
+
+
+       // Рисование фигуры на векторном слое, поо полученному WKT в 4326
+       function drawWkt4326Polygon(polygonWKT) {
+                // Очистка векторного слоя
+                vector.getSource().clear();
+
+                // Задаем формат и создаем фигуру
+                var format = new ol.format.WKT();
+                var feature = format.readFeature(polygonWKT, {
+                        dataProjection: 'EPSG:4326',
+                        featureProjection: raster.getSource().getProjection().getCode()
+                });
+
+                // Помещаем фигуру на векторный слой
+                vector.getSource().addFeature( feature );
+                var polygonWKT = getFeaturesWkt4326(feature);
+                console.log(polygonWKT);
+
+                // Фокус на фигуру
+                var extent = feature.getGeometry().getExtent();
+                map.getView().fit(extent, map.getSize());
+       }
+    </script>
+  </body>
+</html>
